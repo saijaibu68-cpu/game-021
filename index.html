@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เกมจับคู่การ์ด วิทยาการคำนวณ ป.1 (CS Memory Game)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for Thai & Friendly Vibe -->
+    <link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;600;700&family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Mitr', 'Fredoka', sans-serif;
+            background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 50%, #fef3c7 100%);
+            min-height: 100vh;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* 3D Card Flip Utilities */
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+
+        .transform-style-3d {
+            transform-style: preserve-3d;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .backface-hidden {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+
+        /* Pulse glow animation for matched cards */
+        @keyframes glowMatch {
+            0%, 100% { transform: rotateY(180deg) scale(1); box-shadow: 0 0 15px rgba(34, 197, 94, 0.6); }
+            50% { transform: rotateY(180deg) scale(1.05); box-shadow: 0 0 25px rgba(34, 197, 94, 0.9); }
+        }
+
+        .card-matched {
+            animation: glowMatch 0.8s ease-in-out infinite alternate;
+        }
+
+        /* Mismatch Shake Animation */
+        @keyframes shake {
+            0%, 100% { transform: rotateY(180deg) translateX(0); }
+            20%, 60% { transform: rotateY(180deg) translateX(-8px); }
+            40%, 80% { transform: rotateY(180deg) translateX(8px); }
+        }
+
+        .card-mismatch {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        /* Custom Soft Shadows */
+        .custom-shadow {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen text-slate-800 antialiased selection:bg-amber-200">
+
+    <!-- Header Navbar -->
+    <header class="w-full bg-white/80 backdrop-blur-md border-b border-sky-100 sticky top-0 z-20 shadow-sm">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-3">
+            <div class="flex items-center space-x-3">
+                <div class="bg-gradient-to-tr from-sky-400 to-indigo-500 text-white p-2.5 rounded-2xl shadow-md flex items-center justify-center">
+                    <i class="fa-solid fa-robot text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                        CS Memory Game
+                    </h1>
+                    <p class="text-xs text-slate-500 font-medium">วิทยาการคำนวณ ป.1 🤖✨</p>
+                </div>
+            </div>
+
+            <!-- Controls (Sound & Restart) -->
+            <div class="flex items-center gap-2">
+                <button id="soundToggleBtn" class="p-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition font-medium text-sm flex items-center gap-2 shadow-sm border border-slate-200">
+                    <i id="soundIcon" class="fa-solid fa-volume-high text-sky-500"></i>
+                    <span id="soundText" class="hidden sm:inline">เปิดเสียง</span>
+                </button>
+                <button id="restartBtn" class="p-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white transition font-medium text-sm flex items-center gap-2 shadow-md hover:shadow-lg active:scale-95">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span>เริ่มใหม่</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-5xl w-full mx-auto p-4 flex flex-col items-center justify-start gap-6">
+
+        <!-- Level Selector Tabs -->
+        <div class="w-full bg-white/70 backdrop-blur-sm p-1.5 rounded-2xl border border-sky-100 shadow-sm flex justify-center max-w-md">
+            <button class="level-btn flex-1 py-2 px-3 rounded-xl font-bold text-sm transition-all duration-200 text-slate-600 hover:text-sky-600" data-level="easy">
+                ง่าย (4 คู่)
+            </button>
+            <button class="level-btn flex-1 py-2 px-3 rounded-xl font-bold text-sm transition-all duration-200 text-slate-600 hover:text-sky-600" data-level="medium">
+                ปานกลาง (6 คู่)
+            </button>
+            <button class="level-btn flex-1 py-2 px-3 rounded-xl font-bold text-sm transition-all duration-200 text-slate-600 hover:text-sky-600" data-level="hard">
+                ท้าทาย (8 คู่)
+            </button>
+        </div>
+
+        <!-- Game Analytics Bar -->
+        <div class="w-full max-w-3xl bg-white rounded-2xl p-4 shadow-md border border-sky-100 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <!-- Timer -->
+            <div class="bg-sky-50/80 p-2.5 rounded-xl border border-sky-100">
+                <p class="text-xs text-sky-600 font-semibold mb-0.5">⏱️ เวลา</p>
+                <p id="timerDisplay" class="text-xl font-bold text-sky-800">00:00</p>
+            </div>
+            <!-- Flips -->
+            <div class="bg-indigo-50/80 p-2.5 rounded-xl border border-indigo-100">
+                <p class="text-xs text-indigo-600 font-semibold mb-0.5">🔄 เปิดการ์ด</p>
+                <p id="flipsDisplay" class="text-xl font-bold text-indigo-800">0 ครั้ง</p>
+            </div>
+            <!-- Pairs Found -->
+            <div class="bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-100">
+                <p class="text-xs text-emerald-600 font-semibold mb-0.5">🎯 จับคู่สำเร็จ</p>
+                <p id="pairsDisplay" class="text-xl font-bold text-emerald-800">0 / 4</p>
+            </div>
+            <!-- Star Rating -->
+            <div class="bg-amber-50/80 p-2.5 rounded-xl border border-amber-100">
+                <p class="text-xs text-amber-600 font-semibold mb-0.5">⭐ ดาว</p>
+                <div id="starsDisplay" class="flex justify-center text-amber-400 gap-1 text-lg">
+                    <i class="fa-solid fa-star"></i>
+                    <i class="fa-solid fa-star"></i>
+                    <i class="fa-solid fa-star"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Board Container -->
+        <div id="gameBoard" class="w-full max-w-3xl grid gap-3 sm:gap-4 justify-center items-center py-2 transition-all duration-300">
+            <!-- Cards will be dynamically injected here -->
+        </div>
+    </main>
+
+    <!-- Victory Celebration Modal -->
+    <div id="victoryModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-2xl border-4 border-amber-300 transform scale-90 transition-transform duration-300" id="victoryModalCard">
+            <div class="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center text-4xl mx-auto mb-3 shadow-inner">
+                🏆
+            </div>
+            <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-800 mb-1">เก่งมากเลยครับ/ค่ะ!</h2>
+            <p class="text-slate-500 text-sm mb-4">คุณผ่านด่านวิทยาการคำนวณแล้ว 🎉</p>
+
+            <!-- Star Rating Display in Modal -->
+            <div id="modalStars" class="flex justify-center text-amber-400 text-3xl gap-2 mb-6">
+                <i class="fa-solid fa-star"></i>
+                <i class="fa-solid fa-star"></i>
+                <i class="fa-solid fa-star"></i>
+            </div>
+
+            <!-- Stats Summary -->
+            <div class="bg-slate-50 rounded-2xl p-4 grid grid-cols-2 gap-3 mb-6 border border-slate-100">
+                <div class="text-center">
+                    <span class="block text-xs text-slate-400">ใช้เวลาทั้งหมด</span>
+                    <span id="modalTime" class="text-lg font-bold text-sky-600">00:00</span>
+                </div>
+                <div class="text-center">
+                    <span class="block text-xs text-slate-400">การพลิกการ์ด</span>
+                    <span id="modalFlips" class="text-lg font-bold text-indigo-600">0 ครั้ง</span>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button id="modalNextLevelBtn" class="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-200 transition active:scale-95 flex items-center justify-center gap-2">
+                    <span>ด่านถัดไป</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+                <button id="modalRestartBtn" class="flex-1 py-3 px-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold shadow-lg shadow-sky-200 transition active:scale-95 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span>เล่นอีกครั้ง</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ==========================================================================
+           1. CS CONCEPTS DATA FOR GRADE 1 THAI CURRICULUM
+           ========================================================================== */
+        const CS_CARDS = [
+            { id: 'forward', emoji: '⬆️', title: 'เดินหน้า', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+            { id: 'left', emoji: '⬅️', title: 'เลี้ยวซ้าย', color: 'bg-blue-50 text-blue-600 border-blue-200' },
+            { id: 'right', emoji: '➡️', title: 'เลี้ยวขวา', color: 'bg-indigo-50 text-indigo-600 border-indigo-200' },
+            { id: 'bug', emoji: '🐛', title: 'บั๊ก (ข้อผิดพลาด)', color: 'bg-rose-50 text-rose-600 border-rose-200' },
+            { id: 'robot', emoji: '🤖', title: 'หุ่นยนต์', color: 'bg-purple-50 text-purple-600 border-purple-200' },
+            { id: 'categorize', emoji: '📦', title: 'จัดหมวดหมู่', color: 'bg-amber-50 text-amber-600 border-amber-200' },
+            { id: 'pixel', emoji: '🎨', title: 'พิกเซล', color: 'bg-pink-50 text-pink-600 border-pink-200' },
+            { id: 'destination', emoji: '🚩', title: 'จุดหมาย', color: 'bg-teal-50 text-teal-600 border-teal-200' }
+        ];
+
+        // Level Configurations
+        const LEVELS = {
+            easy: { pairs: 4, gridCols: 'grid-cols-4', cardSize: 'h-32 sm:h-36' },
+            medium: { pairs: 6, gridCols: 'grid-cols-3 sm:grid-cols-4', cardSize: 'h-28 sm:h-32' },
+            hard: { pairs: 8, gridCols: 'grid-cols-4', cardSize: 'h-24 sm:h-28' }
+        };
+
+        /* ==========================================================================
+           2. WEB AUDIO API SYNTHESIZER (NO EXTERNAL SOUND FILES)
+           ========================================================================== */
+        class SoundEffects {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        this.ctx = new AudioContext();
+                    }
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playFlip() {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, this.ctx.currentTime + 0.08);
+
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+
+            playMatch() {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime;
+                const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+                
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.07);
+
+                    gain.gain.setValueAtTime(0.2, now + idx * 0.07);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.25);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start(now + idx * 0.07);
+                    osc.stop(now + idx * 0.07 + 0.25);
+                });
+            }
+
+            playMismatch() {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, now); // A3
+                osc.frequency.linearRampToValueAtTime(140, now + 0.18); // Down pitch
+
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.18);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.18);
+            }
+
+            playVictory() {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime;
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+
+                    gain.gain.setValueAtTime(0.25, now + idx * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.4);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start(now + idx * 0.1);
+                    osc.stop(now + idx * 0.1 + 0.4);
+                });
+            }
+        }
+
+        const soundFX = new SoundEffects();
+
+        /* ==========================================================================
+           3. GAME STATE MANAGEMENT
+           ========================================================================== */
+        let currentLevel = 'easy';
+        let cards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let totalFlips = 0;
+        let timerSeconds = 0;
+        let timerInterval = null;
+        let isBoardLocked = false;
+
+        // DOM Elements
+        const gameBoard = document.getElementById('gameBoard');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const flipsDisplay = document.getElementById('flipsDisplay');
+        const pairsDisplay = document.getElementById('pairsDisplay');
+        const starsDisplay = document.getElementById('starsDisplay');
+        const soundToggleBtn = document.getElementById('soundToggleBtn');
+        const soundIcon = document.getElementById('soundIcon');
+        const soundText = document.getElementById('soundText');
+        const restartBtn = document.getElementById('restartBtn');
+        const victoryModal = document.getElementById('victoryModal');
+        const victoryModalCard = document.getElementById('victoryModalCard');
+        const modalStars = document.getElementById('modalStars');
+        const modalTime = document.getElementById('modalTime');
+        const modalFlips = document.getElementById('modalFlips');
+        const modalRestartBtn = document.getElementById('modalRestartBtn');
+        const modalNextLevelBtn = document.getElementById('modalNextLevelBtn');
+        const levelButtons = document.querySelectorAll('.level-btn');
+
+        /* ==========================================================================
+           4. GAME CONTROL & UTILITY FUNCTIONS
+           ========================================================================== */
+
+        // Array Shuffle
+        function shuffle(array) {
+            let currentIndex = array.length, randomIndex;
+            while (currentIndex !== 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        }
+
+        // Timer Functions
+        function startTimer() {
+            stopTimer();
+            timerSeconds = 0;
+            updateTimerUI();
+            timerInterval = setInterval(() => {
+                timerSeconds++;
+                updateTimerUI();
+                updateStarRating();
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+        }
+
+        function updateTimerUI() {
+            const mins = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+            const secs = (timerSeconds % 60).toString().padStart(2, '0');
+            timerDisplay.textContent = `${mins}:${secs}`;
+        }
+
+        // Calculate Star Rating based on flips and time relative to level
+        function calculateStars() {
+            const targetPairs = LEVELS[currentLevel].pairs;
+            const minFlips = targetPairs * 2;
+            
+            // Allow buffer for optimal flips
+            if (totalFlips <= minFlips + 3 && timerSeconds <= targetPairs * 10) {
+                return 3;
+            } else if (totalFlips <= minFlips + 8 && timerSeconds <= targetPairs * 18) {
+                return 2;
+            } else {
+                return 1;
+            }
+        }
+
+        function updateStarRating() {
+            const stars = calculateStars();
+            let html = '';
+            for (let i = 0; i < 3; i++) {
+                if (i < stars) {
+                    html += '<i class="fa-solid fa-star"></i>';
+                } else {
+                    html += '<i class="fa-regular fa-star text-amber-200"></i>';
+                }
+            }
+            starsDisplay.innerHTML = html;
+        }
+
+        /* ==========================================================================
+           5. BOARD INITIALIZATION & CARD RENDERING
+           ========================================================================== */
+        function initGame() {
+            stopTimer();
+            flippedCards = [];
+            matchedPairs = 0;
+            totalFlips = 0;
+            timerSeconds = 0;
+            isBoardLocked = false;
+
+            // Update Header Stats UI
+            const targetPairs = LEVELS[currentLevel].pairs;
+            pairsDisplay.textContent = `0 / ${targetPairs}`;
+            flipsDisplay.textContent = `0 ครั้ง`;
+            updateTimerUI();
+            updateStarRating();
+
+            // Highlight active level tab
+            levelButtons.forEach(btn => {
+                if (btn.dataset.level === currentLevel) {
+                    btn.className = "level-btn flex-1 py-2 px-3 rounded-xl font-bold text-sm transition-all duration-200 bg-sky-500 text-white shadow-md";
+                } else {
+                    btn.className = "level-btn flex-1 py-2 px-3 rounded-xl font-bold text-sm transition-all duration-200 text-slate-600 hover:text-sky-600";
+                }
+            });
+
+            // Select CS Concept pairs for the level
+            const selectedConcepts = CS_CARDS.slice(0, targetPairs);
+            
+            // Create pairs
+            let deck = [];
+            selectedConcepts.forEach((item) => {
+                deck.push({ ...item, instanceId: item.id + '_1' });
+                deck.push({ ...item, instanceId: item.id + '_2' });
+            });
+
+            // Shuffle cards
+            cards = shuffle(deck);
+
+            // Set up Grid CSS
+            const config = LEVELS[currentLevel];
+            gameBoard.className = `w-full max-w-3xl grid ${config.gridCols} gap-3 sm:gap-4 justify-center items-center py-2 transition-all duration-300`;
+            gameBoard.innerHTML = '';
+
+            // Generate HTML for cards
+            cards.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                cardEl.className = `card-wrapper relative ${config.cardSize} w-full perspective-1000 cursor-pointer`;
+                cardEl.dataset.index = index;
+
+                cardEl.innerHTML = `
+                    <div class="card-inner w-full h-full transform-style-3d relative rounded-2xl shadow-md border-2 border-white">
+                        <!-- FRONT OF CARD (FACE DOWN) -->
+                        <div class="card-front absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-sky-400 via-indigo-500 to-purple-500 rounded-2xl flex flex-col items-center justify-center text-white shadow-inner">
+                            <i class="fa-solid fa-code text-2xl sm:text-3xl opacity-80 mb-1"></i>
+                            <span class="text-[10px] sm:text-xs font-semibold tracking-wider uppercase opacity-90">CS P.1</span>
+                        </div>
+                        
+                        <!-- BACK OF CARD (FACE UP) -->
+                        <div class="card-back absolute inset-0 w-full h-full backface-hidden rotate-y-180 ${card.color} rounded-2xl border-2 flex flex-col items-center justify-center p-2 text-center shadow-md">
+                            <span class="text-3xl sm:text-4xl mb-1 filter drop-shadow-sm">${card.emoji}</span>
+                            <span class="text-xs sm:text-sm font-bold leading-tight">${card.title}</span>
+                        </div>
+                    </div>
+                `;
+
+                cardEl.addEventListener('click', () => handleCardClick(cardEl, card));
+                gameBoard.appendChild(cardEl);
+            });
+        }
+
+        /* ==========================================================================
+           6. CARD CLICK & MATCHING MECHANICS
+           ========================================================================== */
+        function handleCardClick(cardEl, cardData) {
+            if (isBoardLocked) return;
+
+            const inner = cardEl.querySelector('.card-inner');
+
+            // Prevent clicking already flipped or matched cards
+            if (inner.classList.contains('rotate-y-180') || cardEl.classList.contains('matched')) {
+                return;
+            }
+
+            // Start timer on first flip
+            if (totalFlips === 0 && timerSeconds === 0 && !timerInterval) {
+                startTimer();
+            }
+
+            // Flip Card Visual & Audio
+            inner.classList.add('rotate-y-180');
+            soundFX.playFlip();
+
+            flippedCards.push({ cardEl, cardData, inner });
+
+            if (flippedCards.length === 2) {
+                totalFlips++;
+                flipsDisplay.textContent = `${totalFlips} ครั้ง`;
+                updateStarRating();
+                checkMatch();
+            }
+        }
+
+        function checkMatch() {
+            isBoardLocked = true;
+            const [card1, card2] = flippedCards;
+            const isMatch = card1.cardData.id === card2.cardData.id;
+
+            if (isMatch) {
+                // Match Found
+                setTimeout(() => {
+                    soundFX.playMatch();
+                    
+                    card1.inner.classList.add('card-matched');
+                    card2.inner.classList.add('card-matched');
+                    
+                    card1.cardEl.classList.add('matched');
+                    card2.cardEl.classList.add('matched');
+
+                    matchedPairs++;
+                    const targetPairs = LEVELS[currentLevel].pairs;
+                    pairsDisplay.textContent = `${matchedPairs} / ${targetPairs}`;
+
+                    flippedCards = [];
+                    isBoardLocked = false;
+
+                    // Check Level Completion
+                    if (matchedPairs === targetPairs) {
+                        stopTimer();
+                        setTimeout(showVictoryModal, 600);
+                    }
+                }, 400);
+
+            } else {
+                // Mismatch
+                setTimeout(() => {
+                    soundFX.playMismatch();
+                    card1.inner.classList.add('card-mismatch');
+                    card2.inner.classList.add('card-mismatch');
+
+                    setTimeout(() => {
+                        card1.inner.classList.remove('rotate-y-180', 'card-mismatch');
+                        card2.inner.classList.remove('rotate-y-180', 'card-mismatch');
+                        flippedCards = [];
+                        isBoardLocked = false;
+                    }, 500);
+                }, 600);
+            }
+        }
+
+        /* ==========================================================================
+           7. VICTORY MODAL & CONFETTI CELEBRATION
+           ========================================================================== */
+        function showVictoryModal() {
+            soundFX.playVictory();
+
+            // Trigger Confetti
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+            }
+
+            // Populate Modal Analytics
+            const mins = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+            const secs = (timerSeconds % 60).toString().padStart(2, '0');
+            modalTime.textContent = `${mins}:${secs}`;
+            modalFlips.textContent = `${totalFlips} ครั้ง`;
+
+            // Stars
+            const stars = calculateStars();
+            let starsHtml = '';
+            for (let i = 0; i < 3; i++) {
+                if (i < stars) {
+                    starsHtml += '<i class="fa-solid fa-star"></i>';
+                } else {
+                    starsHtml += '<i class="fa-regular fa-star text-amber-200"></i>';
+                }
+            }
+            modalStars.innerHTML = starsHtml;
+
+            // Manage Next Level Button Visibility
+            if (currentLevel === 'hard') {
+                modalNextLevelBtn.classList.add('hidden');
+            } else {
+                modalNextLevelBtn.classList.remove('hidden');
+            }
+
+            // Display Modal with Smooth Fade
+            victoryModal.classList.remove('hidden');
+            setTimeout(() => {
+                victoryModal.classList.remove('opacity-0');
+                victoryModalCard.classList.remove('scale-90');
+                victoryModalCard.classList.add('scale-100');
+            }, 50);
+        }
+
+        function hideVictoryModal() {
+            victoryModal.classList.add('opacity-0');
+            victoryModalCard.classList.remove('scale-100');
+            victoryModalCard.classList.add('scale-90');
+            setTimeout(() => {
+                victoryModal.classList.add('hidden');
+            }, 300);
+        }
+
+        /* ==========================================================================
+           8. EVENT LISTENERS & INITIALIZATION
+           ========================================================================== */
+
+        // Level Tab Buttons
+        levelButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const selected = e.currentTarget.dataset.level;
+                if (selected !== currentLevel) {
+                    currentLevel = selected;
+                    initGame();
+                }
+            });
+        });
+
+        // Restart Buttons
+        restartBtn.addEventListener('click', initGame);
+        modalRestartBtn.addEventListener('click', () => {
+            hideVictoryModal();
+            initGame();
+        });
+
+        // Next Level Button
+        modalNextLevelBtn.addEventListener('click', () => {
+            hideVictoryModal();
+            if (currentLevel === 'easy') currentLevel = 'medium';
+            else if (currentLevel === 'medium') currentLevel = 'hard';
+            initGame();
+        });
+
+        // Toggle Sound Mute
+        soundToggleBtn.addEventListener('click', () => {
+            soundFX.muted = !soundFX.muted;
+            if (soundFX.muted) {
+                soundIcon.className = "fa-solid fa-volume-xmark text-slate-400";
+                soundText.textContent = "ปิดเสียง";
+            } else {
+                soundIcon.className = "fa-solid fa-volume-high text-sky-500";
+                soundText.textContent = "เปิดเสียง";
+                soundFX.playFlip(); // Test audio context
+            }
+        });
+
+        // Initialize game on window load
+        window.onload = function() {
+            initGame();
+        };
+    </script>
+</body>
+</html>
